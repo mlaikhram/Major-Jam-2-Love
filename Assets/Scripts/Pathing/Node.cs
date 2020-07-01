@@ -6,6 +6,14 @@ public class Node : PathComponent
 {
     public List<Edge> edges;
 
+    private void Awake()
+    {
+        foreach (Edge edge in edges)
+        {
+            edge.AddNode(this);
+        }
+    }
+
     public HashSet<Node> Neighbors
     {
         get
@@ -13,7 +21,7 @@ public class Node : PathComponent
             HashSet<Node> nodes = new HashSet<Node>();
             foreach (Edge edge in edges)
             {
-                foreach (Node node in edge.nodes)
+                foreach (Node node in edge.Nodes)
                 {
                     if (node != this)
                     {
@@ -31,7 +39,7 @@ public class Node : PathComponent
         int distance = Distance.MAX_DISTANCE;
         foreach (Edge edge in edges)
         {
-            if (edge.nodes.Contains(neighbor) && edge.value < distance)
+            if (edge.Nodes.Contains(neighbor) && edge.value < distance)
             {
                 ans = edge;
                 distance = edge.value;

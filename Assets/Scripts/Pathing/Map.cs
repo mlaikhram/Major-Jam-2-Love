@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
@@ -14,21 +15,11 @@ public class Map : MonoBehaviour
     private void Start()
     {
         instance = this;
-        Debug.Log("Calculating shortest paths from " + graph[4].name);
-        Dictionary<Node, List<PathComponent>> shortestPaths = CalculateShortestPaths(graph[4]);
-        foreach (Node node in shortestPaths.Keys)
-        {
-            Debug.Log("-------------DESTINATION: " + node.name);
-            foreach (PathComponent comp in shortestPaths[node])
-            {
-                Debug.Log(comp.name);
-                comp.GetComponent<SpriteRenderer>().color = new Color(0, 1, 0, 1);
-            }
-        }
     }
 
-    public Dictionary<Node, List<PathComponent>> CalculateShortestPaths(Node start)
+    public Dictionary<Node, List<PathComponent>> CalculateShortestPaths(Node start, int seed)
     {
+        Rng rng = new Rng(seed);
         Dictionary<Node, int> distances = new Dictionary<Node, int>();
         Dictionary<Node, Node> predecessors = new Dictionary<Node, Node>();
         List<string> nodeQ = new List<string>();
@@ -44,7 +35,7 @@ public class Map : MonoBehaviour
         while (nodeQ.Any())
         {
             // get node with shortest distance
-            Node shortestNode = ShortestValue(distances, nodeQ);
+            Node shortestNode = ShortestValue(distances, nodeQ, rng);
             nodeQ.Remove(shortestNode.name);
             foreach (Node neighbor in shortestNode.Neighbors)
             {
@@ -68,19 +59,25 @@ public class Map : MonoBehaviour
         return paths;
     }
 
-    private Node ShortestValue(Dictionary<Node, int> currentDistances, List<string> possibleNodeNames)
+    private Node ShortestValue(Dictionary<Node, int> currentDistances, List<string> possibleNodeNames, Rng rng)
     {
-        Node ans = null;
+        List<Node> possibleAns = new List<Node>();
         int shortestDistance = Distance.MAX_DISTANCE + 1;
         foreach (Node key in currentDistances.Keys) 
         { 
             if (possibleNodeNames.Contains(key.name) && currentDistances[key] < shortestDistance)
             {
-                ans = key;
+                possibleAns.Clear();
+                possibleAns.Add(key);
                 shortestDistance = currentDistances[key];
             }
+            else if (possibleNodeNames.Contains(key.name) && currentDistances[key] == shortestDistance)
+            {
+                possibleAns.Add(key);
+            }
         }
-        return ans;
+
+        return possibleAns[rng.GetNumber() % possibleAns.Count];
     }
 
     private void PopulateListFromPredecessors(List<PathComponent> path, Node destination, Dictionary<Node, Node> predecessorMap)

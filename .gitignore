@@ -2,4 +2,4 @@
 !.gitignore
 
 !*/
-!/Assets/Scripts/**.cs
+!/Assets/Scripts/**/*.cs
