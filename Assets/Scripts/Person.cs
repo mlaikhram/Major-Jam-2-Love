@@ -5,15 +5,24 @@ using UnityEngine;
 
 public class Person : MonoBehaviour
 {
-    public int seed;
+    public int seed; // could possibly add "salt" that changes after every committed obstruction (only obstructions that affect me); salt determines an initial amount of times to cycle the seed
     public float walkSpeed;
     public List<Node> requiredNodes;
-    private List<PathComponent> path = new List<PathComponent>();
 
+
+    private List<PathComponent> path = new List<PathComponent>();
+    public List<PathComponent> Path => path;
+    private LineRenderer line;
+    public LineRenderer Line => line;
+
+    public PathMarker marker;
+    public float markerCooldown;
+    private float markerTimer = 0;
 
     // Start is called before the first frame update
     private void Start()
     {
+        line = GetComponent<LineRenderer>();
         // initialize aesthetics
         // Calculate initial best path through all required nodes
         for (int i = 1; i < requiredNodes.Count; ++i)
@@ -51,7 +60,7 @@ public class Person : MonoBehaviour
         float distance = heading.magnitude;
 
         // check if you've reached the center of the current node
-        if (distance < 0.01f)
+        if (distance <= 0.03f)
         {
             // do idle if necessary
 
@@ -75,6 +84,30 @@ public class Person : MonoBehaviour
             Vector3 direction = heading / distance;
             transform.position += walkSpeed * Time.deltaTime * direction;
         }
+
+        // update line render
+        line.positionCount = 1;
+        line.SetPosition(0, transform.position);
+        int i = 1;
+        foreach (PathComponent comp in path)
+        {
+            if (comp is Node)
+            {
+
+                ++line.positionCount;
+                line.SetPosition(i++, comp.transform.position);
+            }
+        }
+
+        // spawn marker if necessary
+        if (markerTimer <= 0f)
+        {
+            Debug.Log("spawning marker");
+            PathMarker tempMarker = Instantiate<PathMarker>(marker, transform.position, Quaternion.identity);
+            tempMarker.Owner = this;
+            markerTimer += markerCooldown;
+        }
+        markerTimer -= Time.deltaTime;
     }
 
     public void AcknowledgePathChange(PathComponent comp)
