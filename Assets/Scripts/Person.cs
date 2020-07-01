@@ -5,6 +5,9 @@ using UnityEngine;
 
 public class Person : MonoBehaviour
 {
+    public SpriteRenderer hair;
+    public SpriteRenderer skin;
+    public SpriteRenderer clothes;
     public int seed; // could possibly add "salt" that changes after every committed obstruction (only obstructions that affect me); salt determines an initial amount of times to cycle the seed
     public float walkSpeed;
     public List<Node> requiredNodes;
@@ -18,6 +21,8 @@ public class Person : MonoBehaviour
     public PathMarker marker;
     public float markerCooldown;
     private float markerTimer = 0;
+
+    private bool paired = false;
 
     // Start is called before the first frame update
     private void Start()
@@ -44,70 +49,79 @@ public class Person : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // walk to next node in list
-        //      if at a node with an idle time, wait for idle time before continuing
-        //      if at destination node, delete self
-        PathComponent targetNode = null;
-        foreach (PathComponent comp in path)
+        if (!paired)
         {
-            if (comp is Node)
+            // walk to next node in list
+            //      if at a node with an idle time, wait for idle time before continuing
+            //      if at destination node, delete self
+            PathComponent targetNode = null;
+            foreach (PathComponent comp in path)
             {
-                targetNode = comp;
-                break;
-            }
-        }
-        Vector3 heading = targetNode.transform.position - transform.position;
-        float distance = heading.magnitude;
-
-        // check if you've reached the center of the current node
-        if (distance <= 0.03f)
-        {
-            // do idle if necessary
-
-
-            // otherwise delete node
-            path.Remove(targetNode);
-            if (requiredNodes.Contains(targetNode as Node))
-            {
-                requiredNodes.Remove(targetNode as Node);
-                if (!requiredNodes.Any())
+                if (comp is Node)
                 {
-                    Destroy(gameObject);
+                    targetNode = comp;
+                    break;
                 }
             }
-            // remove the next edge
-            path.RemoveAt(0);
-        }
-        // otherwise keep walking
-        else
-        {
-            Vector3 direction = heading / distance;
-            transform.position += walkSpeed * Time.deltaTime * direction;
-        }
+            Vector3 heading = targetNode.transform.position - transform.position;
+            float distance = heading.magnitude;
 
-        // update line render
-        line.positionCount = 1;
-        line.SetPosition(0, transform.position);
-        int i = 1;
-        foreach (PathComponent comp in path)
-        {
-            if (comp is Node)
+            // check if you've reached the center of the current node
+            if (distance <= 0.03f)
             {
+                // do idle if necessary
 
-                ++line.positionCount;
-                line.SetPosition(i++, comp.transform.position);
+
+                // otherwise delete node
+                path.Remove(targetNode);
+                if (requiredNodes[0] == (targetNode as Node))
+                {
+                    requiredNodes.Remove(targetNode as Node);
+                    if (!requiredNodes.Any())
+                    {
+                        Destroy(gameObject);
+                    }
+                }
+                // remove the next edge
+                path.RemoveAt(0);
             }
-        }
+            // otherwise keep walking
+            else
+            {
+                Vector3 direction = heading / distance;
+                transform.position += walkSpeed * Time.deltaTime * direction;
+            }
 
-        // spawn marker if necessary
-        if (markerTimer <= 0f)
-        {
-            Debug.Log("spawning marker");
-            PathMarker tempMarker = Instantiate<PathMarker>(marker, transform.position, Quaternion.identity);
-            tempMarker.Owner = this;
-            markerTimer += markerCooldown;
+            // update line render
+            line.positionCount = 1;
+            line.SetPosition(0, transform.position);
+            int i = 1;
+            foreach (PathComponent comp in path)
+            {
+                if (comp is Node)
+                {
+
+                    ++line.positionCount;
+                    line.SetPosition(i++, comp.transform.position);
+                }
+            }
+
+            // spawn marker if necessary
+            if (markerTimer <= 0f)
+            {
+                Debug.Log("spawning marker");
+                PathMarker tempMarker = Instantiate<PathMarker>(marker, transform.position, Quaternion.identity);
+                tempMarker.Owner = this;
+                markerTimer += markerCooldown;
+            }
+            markerTimer -= Time.deltaTime;
+
+            // order sprites correctly in layer
+            int order = (int)(transform.position.y * -100f);
+            hair.sortingOrder = order;
+            skin.sortingOrder = order;
+            clothes.sortingOrder = order;
         }
-        markerTimer -= Time.deltaTime;
     }
 
     public void AcknowledgePathChange(PathComponent comp)
@@ -124,5 +138,20 @@ public class Person : MonoBehaviour
     public void CheckPreview(PathComponent comp)
     {
         // check if road block is placeable by seeing if the preview route is above the Distance.LIMIT
+    }
+
+    public void PairUp()
+    {
+        paired = true;
+        line.positionCount = 0;
+    }
+
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        Person partner = collision.GetComponent<Person>();
+        if (partner != null)
+        {
+            Player.instance.CheckForMatch(this, partner);
+        }
     }
 }
