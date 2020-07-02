@@ -10,6 +10,9 @@ public class Node : PathComponent
     public bool hideIdle;
     public Vector3 idlePosition;
 
+    private bool isOpen = true;
+    public bool IsOpen => isOpen;
+
     private void Awake()
     {
         foreach (Edge edge in edges)
@@ -50,5 +53,16 @@ public class Node : PathComponent
             }
         }
         return ans;
+    }
+
+    private void OnMouseOver()
+    {
+        // TODO some preview depending on the mouseState of Player
+    }
+
+    private void OnMouseDown()
+    {
+        Debug.Log("clicked on me " + this.name);
+        // TODO do something depending on the mouseState of Player
     }
 }

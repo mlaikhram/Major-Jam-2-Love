@@ -171,7 +171,6 @@ public class Person : MonoBehaviour
         {
             if (comp is Node)
             {
-
                 ++line.positionCount;
                 line.SetPosition(i++, comp.transform.position);
             }
@@ -227,7 +226,7 @@ public class Person : MonoBehaviour
     private bool MustIdle(Node node)
     {
         return
-            requiredNodes[0] == node ||
+            (requiredNodes[0] == node && node.IsOpen) ||
             ((node.nodeType == NodeType.SINGLE_ROAD || node.nodeType == NodeType.INTERSECT_ROAD) && node.idleTime > 0);
     }
 

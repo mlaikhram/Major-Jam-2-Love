@@ -12,4 +12,15 @@ public class Edge : PathComponent
     {
         nodes.Add(node);
     }
+
+    private void OnMouseOver()
+    {
+        // TODO some preview depending on the mouseState of Player
+    }
+
+    private void OnMouseDown()
+    {
+        Debug.Log("clicked on me " + this.name);
+        // TODO do something depending on the mouseState of Player
+    }
 }
