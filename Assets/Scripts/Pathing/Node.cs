@@ -5,6 +5,10 @@ using UnityEngine;
 public class Node : PathComponent
 {
     public List<Edge> edges;
+    public NodeType nodeType;
+    public float idleTime;
+    public bool hideIdle;
+    public Vector3 idlePosition;
 
     private void Awake()
     {

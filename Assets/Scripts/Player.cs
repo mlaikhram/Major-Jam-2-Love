@@ -15,6 +15,9 @@ public class Player : MonoBehaviour
     }
     public LoverPair[] loverPairs;
     private Dictionary<Person, Person> loverMap = new Dictionary<Person, Person>();
+
+    private Obstruction mouseState = Obstruction.NONE;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -28,7 +31,11 @@ public class Player : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
+        if (Input.GetMouseButtonDown(1))
+        {
+            Debug.Log("right click");
+            mouseState = Obstruction.NONE;
+        }
     }
 
     public void CheckForMatch(Person caller, Person partner)
@@ -39,5 +46,10 @@ public class Player : MonoBehaviour
             caller.PairUp();
             partner.PairUp();
         }
+    }
+
+    public void SelectObstruction(Obstruction obstruction)
+    {
+        mouseState = obstruction;
     }
 }
