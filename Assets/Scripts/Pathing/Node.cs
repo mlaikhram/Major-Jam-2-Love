@@ -57,17 +57,80 @@ public class Node : PathComponent
 
     private void OnMouseEnter()
     {
-        
+        if (!isObstructed)
+        {
+            switch (Player.instance.MouseState)
+            {
+                case Obstruction.RUSH_HOUR:
+                    if (nodeType == NodeType.COFFEE || nodeType == NodeType.BREAKFAST || nodeType == NodeType.NEWS)
+                    {
+                        Debug.Log("warning people");
+                        foreach (Person person in listeners)
+                        {
+                            Debug.Log(person.name);
+                            person.CheckPreview(this);
+                        }
+                    }
+                    break;
+
+                case Obstruction.CROSSING_GUARD:
+                    if (nodeType == NodeType.INTERSECT_ROAD)
+                    {
+                        Debug.Log("warning people");
+                        foreach (Person person in listeners)
+                        {
+                            Debug.Log(person.name);
+                            person.CheckPreview(this);
+                        }
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
     }
 
-    private void OnMouseOver()
+    private void OnMouseExit()
     {
-        // TODO some preview depending on the mouseState of Player
+        if (!isObstructed)
+        {
+            foreach (Person person in listeners)
+            {
+                person.ClearPreview();
+            }
+        }
     }
 
     private void OnMouseDown()
     {
-        Debug.Log("clicked on me " + this.name);
-        // TODO do something depending on the mouseState of Player
+        if (!isObstructed)
+        {
+            switch (Player.instance.MouseState)
+            {
+                case Obstruction.RUSH_HOUR:
+                    if (nodeType == NodeType.COFFEE || nodeType == NodeType.BREAKFAST || nodeType == NodeType.NEWS)
+                    {
+                        Debug.Log("rerouting people");
+                        idleTime += Delay.RUSH_HOUR;
+                        isObstructed = true;
+                        Player.instance.SelectObstruction(Obstruction.NONE);
+                    }
+                    break;
+
+                case Obstruction.CROSSING_GUARD:
+                    if (nodeType == NodeType.INTERSECT_ROAD)
+                    {
+                        Debug.Log("rerouting people");
+                        idleTime += Delay.CROSSING_GUARD;
+                        isObstructed = true;
+                        Player.instance.SelectObstruction(Obstruction.NONE);
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -33,6 +34,7 @@ public class Person : MonoBehaviour
     private LineRenderer line;
     public LineRenderer Line => line;
 
+    private Node blockedNode = null;
     private HashSet<Edge> blockedEdges = new HashSet<Edge>();
     private List<PathComponent> previewPath = new List<PathComponent>();
 
@@ -48,7 +50,9 @@ public class Person : MonoBehaviour
         line = GetComponent<LineRenderer>();
 
         // setup idle times
-        idleMap[NodeType.SINGLE_ROAD] = 0;
+        idleMap[NodeType.SINGLE_ROAD_H] = 0;
+        idleMap[NodeType.SINGLE_ROAD_V] = 0;
+        idleMap[NodeType.SINGLE_ROAD_L] = 0;
         idleMap[NodeType.INTERSECT_ROAD] = 0;
         idleMap[NodeType.COFFEE] = idleTimes.coffee;
         idleMap[NodeType.BREAKFAST] = idleTimes.breakfast;
@@ -77,6 +81,14 @@ public class Person : MonoBehaviour
         requiredNodes.RemoveAt(0);
         // remove first edge
         path.RemoveAt(0);
+    }
+
+    void Update()
+    {
+        if (Input.GetMouseButtonDown(1))
+        {
+            ClearPreview();
+        }
     }
 
     private void FixedUpdate()
@@ -125,6 +137,10 @@ public class Person : MonoBehaviour
                     if (MustIdle(targetNode))
                     {
                         status = PersonStatus.IDLE;
+                        if (blockedNode == targetNode)
+                        {
+                            blockedNode = null;
+                        }
                         idleNode = targetNode;
                         idleTimer = idleMap[targetNode.nodeType] + targetNode.idleTime;
                         transform.position = targetNode.idlePosition;
@@ -158,6 +174,9 @@ public class Person : MonoBehaviour
             default:
                 break;
         }
+
+        // update timeline
+        //      include check for blockedNode when paired with MouseState for delays
 
         // update line render
         Vector3 startingPoint = idleNode == null ? transform.position : idleNode.transform.position;
@@ -203,6 +222,14 @@ public class Person : MonoBehaviour
         switch(Player.instance.MouseState)
         {
             case Obstruction.ROAD_BLOCK:
+                foreach (PathComponent comp in path)
+                {
+                    comp.RemoveListener(this);
+                }
+                foreach (PathComponent comp in previewPath)
+                {
+                    comp.AddListener(this);
+                }
                 path = new List<PathComponent>(previewPath);
                 previewPath.Clear();
                 blockedEdges.Clear();
@@ -253,6 +280,20 @@ public class Person : MonoBehaviour
                 previewPath.InsertRange(0, path.GetRange(0, pathBlockedEdgeIndex));
                 break;
 
+            case Obstruction.RUSH_HOUR:
+                if (idleNode != comps[0])
+                {
+                    blockedNode = comps[0] as Node;
+                }
+                break;
+
+            case Obstruction.CROSSING_GUARD:
+                if (idleNode != comps[0])
+                {
+                    blockedNode = comps[0] as Node;
+                }
+                break;
+
             default:
                 break;
         }
@@ -262,6 +303,7 @@ public class Person : MonoBehaviour
     {
         previewPath.Clear();
         blockedEdges.Clear();
+        blockedNode = null;
     }
 
     public void PairUp()
@@ -283,7 +325,7 @@ public class Person : MonoBehaviour
     {
         return
             (requiredNodes[0] == node && node.IsOpen) ||
-            ((node.nodeType == NodeType.SINGLE_ROAD || node.nodeType == NodeType.INTERSECT_ROAD) && node.idleTime > 0);
+            ((node.nodeType == NodeType.SINGLE_ROAD_H || node.nodeType == NodeType.SINGLE_ROAD_V || node.nodeType == NodeType.SINGLE_ROAD_L || node.nodeType == NodeType.INTERSECT_ROAD) && node.idleTime > 0);
     }
 
     private void EnableSprites(bool enable)

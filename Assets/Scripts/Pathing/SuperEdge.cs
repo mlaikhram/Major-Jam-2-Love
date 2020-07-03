@@ -2,17 +2,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Edge : PathComponent
+public class SuperEdge : MonoBehaviour
 {
+    public Edge[] edges;
     public NodeType nodeType;
-    public int value;
-    private List<Node> nodes = new List<Node>();
-    public List<Node> Nodes => nodes;
 
-    public void AddNode(Node node)
-    {
-        nodes.Add(node);
-    }
+    private bool isObstructed = false;
 
     private void OnMouseEnter()
     {
@@ -23,11 +18,16 @@ public class Edge : PathComponent
                 case Obstruction.ROAD_BLOCK:
                     if (nodeType == NodeType.SINGLE_ROAD_H || nodeType == NodeType.SINGLE_ROAD_V)
                     {
+                        HashSet<Person> listeners = new HashSet<Person>();
+                        foreach (Edge edge in edges)
+                        {
+                            listeners.UnionWith(edge.Listeners);
+                        }
                         Debug.Log("warning people");
                         foreach (Person person in listeners)
                         {
                             Debug.Log(person.name);
-                            person.CheckPreview(this);
+                            person.CheckPreview(edges);
                         }
                     }
                     break;
@@ -42,9 +42,12 @@ public class Edge : PathComponent
     {
         if (!isObstructed)
         {
-            foreach (Person person in listeners)
+            foreach (Edge edge in edges)
             {
-                person.ClearPreview();
+                foreach (Person person in edge.Listeners)
+                {
+                    person.ClearPreview();
+                }
             }
         }
     }
@@ -58,8 +61,13 @@ public class Edge : PathComponent
                 case Obstruction.ROAD_BLOCK:
                     if (nodeType == NodeType.SINGLE_ROAD_H || nodeType == NodeType.SINGLE_ROAD_V)
                     {
+                        HashSet<Person> listeners = new HashSet<Person>();
+                        foreach (Edge edge in edges)
+                        {
+                            listeners.UnionWith(edge.Listeners);
+                            edge.value = Distance.MAX_DISTANCE;
+                        }
                         Debug.Log("rerouting people");
-                        value = Distance.MAX_DISTANCE;
                         foreach (Person person in listeners)
                         {
                             Debug.Log(person.name);
