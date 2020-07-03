@@ -43,7 +43,7 @@ public class Node : PathComponent
     public Edge NeighborEdge(Node neighbor)
     {
         Edge ans = null;
-        int distance = Distance.MAX_DISTANCE;
+        int distance = 5 * Distance.MAX_DISTANCE;
         foreach (Edge edge in edges)
         {
             if (edge.Nodes.Contains(neighbor) && edge.value < distance)
@@ -53,6 +53,11 @@ public class Node : PathComponent
             }
         }
         return ans;
+    }
+
+    private void OnMouseEnter()
+    {
+        
     }
 
     private void OnMouseOver()

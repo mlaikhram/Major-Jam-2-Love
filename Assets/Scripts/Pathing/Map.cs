@@ -17,7 +17,7 @@ public class Map : MonoBehaviour
         instance = this;
     }
 
-    public Dictionary<Node, List<PathComponent>> CalculateShortestPaths(Node start, int seed)
+    public Dictionary<Node, List<PathComponent>> CalculateShortestPaths(Node start, int seed, HashSet<Edge> blockedEdges = null)
     {
         Rng rng = new Rng(seed);
         Dictionary<Node, int> distances = new Dictionary<Node, int>();
@@ -39,7 +39,8 @@ public class Map : MonoBehaviour
             nodeQ.Remove(shortestNode.name);
             foreach (Node neighbor in shortestNode.Neighbors)
             {
-                int altDistance = distances[shortestNode] + shortestNode.NeighborEdge(neighbor).value;
+                Edge neighborEdge = shortestNode.NeighborEdge(neighbor);
+                int altDistance = distances[shortestNode] + (blockedEdges != null && blockedEdges.Contains(neighborEdge) ? Distance.MAX_DISTANCE : neighborEdge.value);
                 if (altDistance < distances[neighbor])
                 {
                     distances[neighbor] = altDistance;

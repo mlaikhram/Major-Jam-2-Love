@@ -16,7 +16,8 @@ public class Player : MonoBehaviour
     public LoverPair[] loverPairs;
     private Dictionary<Person, Person> loverMap = new Dictionary<Person, Person>();
 
-    private Obstruction mouseState = Obstruction.NONE;
+    private Obstruction mouseState = Obstruction.ROAD_BLOCK;
+    public Obstruction MouseState => mouseState;
 
     // Start is called before the first frame update
     void Start()

@@ -13,6 +13,31 @@ public class Edge : PathComponent
         nodes.Add(node);
     }
 
+    private void OnMouseEnter()
+    {
+        switch (Player.instance.MouseState)
+        {
+            case Obstruction.ROAD_BLOCK:
+                Debug.Log("warning people");
+                foreach (Person person in listeners)
+                {
+                    Debug.Log(person.name);
+                    person.CheckPreview(this);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void OnMouseExit()
+    {
+        foreach (Person person in listeners)
+        {
+            person.ClearPreview();
+        }
+    }
+
     private void OnMouseOver()
     {
         // TODO some preview depending on the mouseState of Player
@@ -20,7 +45,19 @@ public class Edge : PathComponent
 
     private void OnMouseDown()
     {
-        Debug.Log("clicked on me " + this.name);
-        // TODO do something depending on the mouseState of Player
+        switch (Player.instance.MouseState)
+        {
+            case Obstruction.ROAD_BLOCK:
+                Debug.Log("rerouting people");
+                foreach (Person person in listeners)
+                {
+                    Debug.Log(person.name);
+                    person.AcknowledgePathChange();
+                }
+                break;
+            default:
+                break;
+        }
+        Player.instance.SelectObstruction(Obstruction.NONE);
     }
 }

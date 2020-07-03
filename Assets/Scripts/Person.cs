@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
 
 public class Person : MonoBehaviour
@@ -32,6 +33,9 @@ public class Person : MonoBehaviour
     private LineRenderer line;
     public LineRenderer Line => line;
 
+    private HashSet<Edge> blockedEdges = new HashSet<Edge>();
+    private List<PathComponent> previewPath = new List<PathComponent>();
+
     public PathMarker marker;
     public float markerCooldown;
     private float markerTimer = 0;
@@ -53,6 +57,8 @@ public class Person : MonoBehaviour
         idleMap[NodeType.WORK] = 0;
 
         // initialize aesthetics
+
+
         // Calculate initial best path through all required nodes
         for (int i = 1; i < requiredNodes.Count; ++i)
         {
@@ -62,13 +68,15 @@ public class Person : MonoBehaviour
         foreach (PathComponent comp in path)
         {
             Debug.Log(comp.name);
-            comp.GetComponent<SpriteRenderer>().color = new Color(0, 1, 0, 1);
+            comp.AddListener(this);
         }
         // tp to initial node
         Debug.Log("moving to ");
         Debug.Log(requiredNodes[0].transform.position);
         transform.position = requiredNodes[0].transform.position;
         requiredNodes.RemoveAt(0);
+        // remove first edge
+        path.RemoveAt(0);
     }
 
     private void FixedUpdate()
@@ -85,9 +93,7 @@ public class Person : MonoBehaviour
                     status = PersonStatus.WALKING;
                     transform.position = idleNode.transform.position;
                     EnableSprites(true);
-                    path.Remove(idleNode);
-                    // remove the next edge
-                    path.RemoveAt(0);
+                    RemovePathNode(idleNode);
                     idleNode = null;
                 }
                 else
@@ -127,20 +133,11 @@ public class Person : MonoBehaviour
                             EnableSprites(false);
                         }
                     }
-
-                    // otherwise delete node
-                    path.Remove(targetNode);
-                    if (requiredNodes[0] == (targetNode as Node))
+                    else
                     {
-                        requiredNodes.Remove(targetNode as Node);
-                        if (!requiredNodes.Any())
-                        {
-                            Destroy(gameObject);
-                            return;
-                        }
+                        // otherwise delete node
+                        RemovePathNode(targetNode);
                     }
-                    // remove the next edge
-                    path.RemoveAt(0);
                 }
                 // otherwise keep walking
                 else
@@ -164,10 +161,12 @@ public class Person : MonoBehaviour
 
         // update line render
         Vector3 startingPoint = idleNode == null ? transform.position : idleNode.transform.position;
+
         line.positionCount = 1;
         line.SetPosition(0, startingPoint);
         int i = 1;
-        foreach (PathComponent comp in path)
+        List<PathComponent> pathToDraw = previewPath.Any() ? previewPath : path;
+        foreach (PathComponent comp in pathToDraw)
         {
             if (comp is Node)
             {
@@ -192,20 +191,77 @@ public class Person : MonoBehaviour
         clothes.sortingOrder = order + 1;
     }
 
-    public void AcknowledgePathChange(PathComponent comp)
+    public void AcknowledgePathChange()
     {
         // if edge, re-roll from previous node, checking paths to all subsequent important nodes
         //      if important node is not the finish, and important node path length > 100, 
-        //      then find a similar nearby important node and insert it after this node, shifting idle time from this node to new node
+        //      then find a similar nearby important node and insert it after this node, shifting idle time from this node to new 
 
         // if node, check the type of node and act accordingly
         // if node is locked, then find a similar nearby important node and insert it after this node, shifting idle time from this node to new node
         // if node wait time is increased, do nothing
+        switch(Player.instance.MouseState)
+        {
+            case Obstruction.ROAD_BLOCK:
+                path = new List<PathComponent>(previewPath);
+                previewPath.Clear();
+                blockedEdges.Clear();
+                break;
+
+            default:
+                break;
+        }
     }
 
-    public void CheckPreview(PathComponent comp)
+    public void CheckPreview(params PathComponent[] comps)
     {
         // check if road block is placeable by seeing if the preview route is above the Distance.LIMIT
+        switch (Player.instance.MouseState)
+        {
+            case Obstruction.ROAD_BLOCK:
+                // figure out which required nodes are affected by this road block
+                List<Node> requiredPreviewNodes = new List<Node>(requiredNodes);
+                int pathBlockedEdgeIndex = -1;
+                for (int i = 0; i < path.Count; ++i)
+                {
+                    if (comps.Contains(path[i]))
+                    {
+                        pathBlockedEdgeIndex = i;
+                        requiredPreviewNodes.Insert(0, path[i - 1] as Node);
+                        break;
+                    }
+                    else if (requiredPreviewNodes[0] == path[i] || requiredPreviewNodes[0] == idleNode)
+                    {
+                        requiredPreviewNodes.RemoveAt(0);
+                    }
+                }
+
+                blockedEdges.Clear();
+                foreach (PathComponent comp in comps)
+                {
+                    blockedEdges.Add(comp as Edge);
+                }
+
+                // calculate preview path
+                previewPath.Clear();
+                for (int i = 1; i < requiredPreviewNodes.Count; ++i)
+                {
+                    // TODO: check if a path cost is >= MAX_DISTANCE and attempt to go to another building, or prevent user from placing obstruction
+                    previewPath.AddRange(Map.instance.CalculateShortestPaths(requiredPreviewNodes[i - 1], seed, blockedEdges)[requiredPreviewNodes[i]]);
+                }
+
+                previewPath.InsertRange(0, path.GetRange(0, pathBlockedEdgeIndex));
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    public void ClearPreview()
+    {
+        previewPath.Clear();
+        blockedEdges.Clear();
     }
 
     public void PairUp()
@@ -235,5 +291,51 @@ public class Person : MonoBehaviour
         hair.enabled = enable;
         skin.enabled = enable;
         clothes.enabled = enable;
+    }
+
+    private void RemovePathNode(Node node)
+    {
+        path.Remove(node);
+        if (!path.Contains(node))
+        {
+            node.RemoveListener(this);
+        }
+        if (previewPath.Any())
+        {
+            previewPath.Remove(node);
+        }
+        if (requiredNodes[0] == node)
+        {
+            requiredNodes.Remove(node);
+            if (!requiredNodes.Any())
+            {
+                Destroy(gameObject);
+                return;
+            }
+        }
+        // remove the next edge
+        PathComponent nextEdge = path[0];
+        path.Remove(nextEdge);
+        if (!path.Contains(nextEdge))
+        {
+            nextEdge.RemoveListener(this);
+        }
+        if (previewPath.Any())
+        {
+            previewPath.Remove(nextEdge);
+        }
+        // check if preview is affected
+        if (blockedEdges.Contains(nextEdge))
+        {
+            if (path.Contains(nextEdge))
+            {
+                Debug.Log("updating preview");
+                CheckPreview(blockedEdges.ToArray());
+            }
+            else
+            {
+                ClearPreview();
+            }
+        }
     }
 }

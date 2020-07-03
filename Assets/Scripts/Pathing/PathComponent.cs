@@ -15,12 +15,4 @@ public abstract class PathComponent : MonoBehaviour
     {
         listeners.Remove(person);
     }
-
-    public void NotifyListeners()
-    {
-        foreach (Person listener in listeners)
-        {
-            listener.AcknowledgePathChange(this);
-        }
-    }
 }
