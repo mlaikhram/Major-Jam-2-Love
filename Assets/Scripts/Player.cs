@@ -12,6 +12,7 @@ public class Player : MonoBehaviour
     public GameObject rushHourglass;
     public GameObject closedLock;
     public GameObject crossingGuard;
+    public GameObject heart;
 
     [Serializable]
     public struct LoverPair
@@ -51,6 +52,12 @@ public class Player : MonoBehaviour
             // match!
             caller.PairUp();
             partner.PairUp();
+            Vector3 midpoint = new Vector3(
+                caller.transform.position.x + (partner.transform.position.x - caller.transform.position.x) / 2,
+                caller.transform.position.y + (partner.transform.position.y - caller.transform.position.y) / 2 + 0.7f,
+                0
+                );
+            Instantiate(heart, midpoint, Quaternion.identity);
         }
     }
 

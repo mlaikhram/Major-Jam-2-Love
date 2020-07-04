@@ -269,7 +269,7 @@ public class Person : MonoBehaviour
                     if (altNodeMap.ContainsKey(requiredNodes[i]))
                     {
                         requiredNodes[i] = altNodeMap[requiredNodes[i]];
-                        --i;
+                        //--i;
                     }
                 }
                 ClearPreview();
