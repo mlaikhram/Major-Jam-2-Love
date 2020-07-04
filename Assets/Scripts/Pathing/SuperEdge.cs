@@ -9,6 +9,23 @@ public class SuperEdge : MonoBehaviour
 
     private bool isObstructed = false;
 
+    private GameObject roadblock1 = null;
+    private GameObject roadblock2 = null;
+    private BoxCollider2D boxCollider;
+
+    private void Start()
+    {
+        boxCollider = GetComponent<BoxCollider2D>();
+    }
+
+    private void Update()
+    {
+        if (!isObstructed && Input.GetMouseButtonDown(1))
+        {
+            DestroyRoadblocks();
+        }
+    }
+
     private void OnMouseEnter()
     {
         if (!isObstructed)
@@ -18,15 +35,14 @@ public class SuperEdge : MonoBehaviour
                 case Obstruction.ROAD_BLOCK:
                     if (nodeType == NodeType.SINGLE_ROAD_H || nodeType == NodeType.SINGLE_ROAD_V)
                     {
+                        CreateRoadblocks();
                         HashSet<Person> listeners = new HashSet<Person>();
                         foreach (Edge edge in edges)
                         {
                             listeners.UnionWith(edge.Listeners);
                         }
-                        Debug.Log("warning people");
                         foreach (Person person in listeners)
                         {
-                            Debug.Log(person.name);
                             person.CheckPreview(edges);
                         }
                     }
@@ -42,11 +58,16 @@ public class SuperEdge : MonoBehaviour
     {
         if (!isObstructed)
         {
-            foreach (Edge edge in edges)
+            DestroyRoadblocks();
+            if (Player.instance.MouseState == Obstruction.ROAD_BLOCK)
             {
-                foreach (Person person in edge.Listeners)
+                foreach (Edge edge in edges)
                 {
-                    person.ClearPreview();
+                    HashSet<Person> tempListeners = new HashSet<Person>(edge.Listeners);
+                    foreach (Person person in tempListeners)
+                    {
+                        person.ClearPreview();
+                    }
                 }
             }
         }
@@ -67,10 +88,8 @@ public class SuperEdge : MonoBehaviour
                             listeners.UnionWith(edge.Listeners);
                             edge.value = Distance.MAX_DISTANCE;
                         }
-                        Debug.Log("rerouting people");
                         foreach (Person person in listeners)
                         {
-                            Debug.Log(person.name);
                             person.AcknowledgePathChange();
                         }
                         isObstructed = true;
@@ -81,6 +100,34 @@ public class SuperEdge : MonoBehaviour
                 default:
                     break;
             }
+        }
+    }
+
+    private void CreateRoadblocks()
+    {
+        if (nodeType == NodeType.SINGLE_ROAD_H)
+        {
+            roadblock1 = Instantiate(Player.instance.roadblockV, new Vector3(transform.position.x - 0.5f * boxCollider.size.x + 0.3f, transform.position.y + 0.1f, 0), Quaternion.identity);
+            roadblock2 = Instantiate(Player.instance.roadblockV, new Vector3(transform.position.x + 0.5f * boxCollider.size.x - 0.3f, transform.position.y + 0.1f, 0), Quaternion.identity);
+        }
+        else if (nodeType == NodeType.SINGLE_ROAD_V)
+        {
+            roadblock1 = Instantiate(Player.instance.roadblockH, new Vector3(transform.position.x, transform.position.y - 0.5f * boxCollider.size.y + 0.2f, 0), Quaternion.identity);
+            roadblock2 = Instantiate(Player.instance.roadblockH, new Vector3(transform.position.x, transform.position.y + 0.5f * boxCollider.size.y + 0.2f, 0), Quaternion.identity);
+        }
+    }
+
+    private void DestroyRoadblocks()
+    {
+        if (roadblock1 != null)
+        {
+            Destroy(roadblock1);
+            roadblock1 = null;
+        }
+        if (roadblock2 != null)
+        {
+            Destroy(roadblock2);
+            roadblock2 = null;
         }
     }
 }

@@ -27,7 +27,7 @@ public class Map : MonoBehaviour
         // Use Dijkstra's Algorithm to get shortest distances to each node
         foreach (Node node in graph)
         {
-            distances[node] = Distance.MAX_DISTANCE;
+            distances[node] = 100 * Distance.MAX_DISTANCE;
             predecessors[node] = null;
             nodeQ.Add(node.name);
         }
@@ -63,7 +63,7 @@ public class Map : MonoBehaviour
     private Node ShortestValue(Dictionary<Node, int> currentDistances, List<string> possibleNodeNames, Rng rng)
     {
         List<Node> possibleAns = new List<Node>();
-        int shortestDistance = Distance.MAX_DISTANCE + 1;
+        int shortestDistance = 100 * Distance.MAX_DISTANCE + 1;
         foreach (Node key in currentDistances.Keys) 
         { 
             if (possibleNodeNames.Contains(key.name) && currentDistances[key] < shortestDistance)

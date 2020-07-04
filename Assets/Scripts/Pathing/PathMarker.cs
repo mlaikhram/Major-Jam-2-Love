@@ -72,4 +72,10 @@ public class PathMarker : MonoBehaviour
             transform.position += 10f * owner.walkSpeed * Time.deltaTime * direction;
         }
     }
+
+    private void OnDestroy()
+    {
+        transform.position = new Vector3(100, 100, 100);
+        owner.MarkerList.Remove(this);
+    }
 }

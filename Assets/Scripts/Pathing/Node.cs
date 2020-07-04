@@ -10,14 +10,26 @@ public class Node : PathComponent
     public bool hideIdle;
     public Vector3 idlePosition;
 
+    public List<SpriteRenderer> windows;
+
     private bool isOpen = true;
     public bool IsOpen => isOpen;
+
+    private GameObject obstructIcon = null;
 
     private void Awake()
     {
         foreach (Edge edge in edges)
         {
             edge.AddNode(this);
+        }
+    }
+
+    private void Update()
+    {
+        if (!isObstructed && Input.GetMouseButtonDown(1))
+        {
+            DestroyObstructIcon();
         }
     }
 
@@ -62,10 +74,24 @@ public class Node : PathComponent
             switch (Player.instance.MouseState)
             {
                 case Obstruction.RUSH_HOUR:
+                    if (nodeType == NodeType.COFFEE || nodeType == NodeType.BREAKFAST || nodeType == NodeType.NEWS || nodeType == NodeType.BANK)
+                    {
+                        CreateHourglass();
+                        HashSet<Person> tempListeners = new HashSet<Person>(listeners);
+                        foreach (Person person in tempListeners)
+                        {
+                            Debug.Log(person.name);
+                            person.CheckPreview(this);
+                        }
+                    }
+                    break;
+
+                case Obstruction.SHUTDOWN:
                     if (nodeType == NodeType.COFFEE || nodeType == NodeType.BREAKFAST || nodeType == NodeType.NEWS)
                     {
-                        Debug.Log("warning people");
-                        foreach (Person person in listeners)
+                        TurnOffWindows();
+                        HashSet<Person> tempListeners = new HashSet<Person>(listeners);
+                        foreach (Person person in tempListeners)
                         {
                             Debug.Log(person.name);
                             person.CheckPreview(this);
@@ -76,8 +102,9 @@ public class Node : PathComponent
                 case Obstruction.CROSSING_GUARD:
                     if (nodeType == NodeType.INTERSECT_ROAD)
                     {
-                        Debug.Log("warning people");
-                        foreach (Person person in listeners)
+                        CreateCrossingGuard();
+                        HashSet<Person> tempListeners = new HashSet<Person>(listeners);
+                        foreach (Person person in tempListeners)
                         {
                             Debug.Log(person.name);
                             person.CheckPreview(this);
@@ -95,9 +122,14 @@ public class Node : PathComponent
     {
         if (!isObstructed)
         {
-            foreach (Person person in listeners)
+            DestroyObstructIcon();
+            if (Player.instance.MouseState == Obstruction.RUSH_HOUR || Player.instance.MouseState == Obstruction.CROSSING_GUARD || Player.instance.MouseState == Obstruction.SHUTDOWN)
             {
-                person.ClearPreview();
+                HashSet<Person> tempListeners = new HashSet<Person>(listeners);
+                foreach (Person person in tempListeners)
+                {
+                    person.ClearPreview();
+                }
             }
         }
     }
@@ -109,10 +141,23 @@ public class Node : PathComponent
             switch (Player.instance.MouseState)
             {
                 case Obstruction.RUSH_HOUR:
+                    if (nodeType == NodeType.COFFEE || nodeType == NodeType.BREAKFAST || nodeType == NodeType.NEWS || nodeType == NodeType.BANK)
+                    {
+                        idleTime += Delay.RUSH_HOUR;
+                        isObstructed = true;
+                        Player.instance.SelectObstruction(Obstruction.NONE);
+                    }
+                    break;
+
+                case Obstruction.SHUTDOWN:
                     if (nodeType == NodeType.COFFEE || nodeType == NodeType.BREAKFAST || nodeType == NodeType.NEWS)
                     {
-                        Debug.Log("rerouting people");
-                        idleTime += Delay.RUSH_HOUR;
+                        isOpen = false;
+                        HashSet<Person> tempListeners = new HashSet<Person>(listeners);
+                        foreach (Person person in tempListeners)
+                        {
+                            person.AcknowledgePathChange();
+                        }
                         isObstructed = true;
                         Player.instance.SelectObstruction(Obstruction.NONE);
                     }
@@ -121,7 +166,6 @@ public class Node : PathComponent
                 case Obstruction.CROSSING_GUARD:
                     if (nodeType == NodeType.INTERSECT_ROAD)
                     {
-                        Debug.Log("rerouting people");
                         idleTime += Delay.CROSSING_GUARD;
                         isObstructed = true;
                         Player.instance.SelectObstruction(Obstruction.NONE);
@@ -131,6 +175,37 @@ public class Node : PathComponent
                 default:
                     break;
             }
+        }
+    }
+
+    private void CreateCrossingGuard()
+    {
+        obstructIcon = Instantiate(Player.instance.crossingGuard, new Vector3(transform.position.x + 0.2f, transform.position.y + 0.4f, 0f), Quaternion.identity);
+    }
+
+    private void CreateHourglass()
+    {
+        obstructIcon = Instantiate(Player.instance.rushHourglass, new Vector3(idlePosition.x, idlePosition.y - 1f, 0f), Quaternion.identity);
+    }
+
+    private void TurnOffWindows()
+    {
+        foreach (SpriteRenderer window in windows)
+        {
+            window.color = new Color(0.35f, 0.35f, 0.35f, 1);
+        }
+    }
+
+    private void DestroyObstructIcon()
+    {
+        if (obstructIcon != null)
+        {
+            Destroy(obstructIcon);
+            obstructIcon = null;
+        }
+        foreach (SpriteRenderer window in windows)
+        {
+            window.color = new Color(1, 1, 1, 1);
         }
     }
 }

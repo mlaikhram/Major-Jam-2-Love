@@ -7,6 +7,12 @@ public class Player : MonoBehaviour
 {
     public static Player instance;
 
+    public GameObject roadblockH;
+    public GameObject roadblockV;
+    public GameObject rushHourglass;
+    public GameObject closedLock;
+    public GameObject crossingGuard;
+
     [Serializable]
     public struct LoverPair
     {
@@ -16,7 +22,7 @@ public class Player : MonoBehaviour
     public LoverPair[] loverPairs;
     private Dictionary<Person, Person> loverMap = new Dictionary<Person, Person>();
 
-    private Obstruction mouseState = Obstruction.ROAD_BLOCK;
+    private Obstruction mouseState = Obstruction.NONE;
     public Obstruction MouseState => mouseState;
 
     // Start is called before the first frame update
@@ -34,7 +40,6 @@ public class Player : MonoBehaviour
     {
         if (Input.GetMouseButtonDown(1))
         {
-            Debug.Log("right click");
             mouseState = Obstruction.NONE;
         }
     }

@@ -3,14 +3,18 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices.WindowsRuntime;
 using UnityEditor;
 using UnityEngine;
 
 public class Person : MonoBehaviour
 {
     public SpriteRenderer hair;
-    public SpriteRenderer skin;
-    public SpriteRenderer clothes;
+    public SpriteRenderer head;
+    public SpriteRenderer body;
+    public SpriteRenderer shirt;
+    public SpriteRenderer pants;
+    public SpriteRenderer shoes;
     public int seed; // could possibly add "salt" that changes after every committed obstruction (only obstructions that affect me); salt determines an initial amount of times to cycle the seed
     public float walkSpeed;
     public List<Node> requiredNodes;
@@ -37,10 +41,13 @@ public class Person : MonoBehaviour
     private Node blockedNode = null;
     private HashSet<Edge> blockedEdges = new HashSet<Edge>();
     private List<PathComponent> previewPath = new List<PathComponent>();
+    private Dictionary<Node, Node> altNodeMap = new Dictionary<Node, Node>();
 
     public PathMarker marker;
     public float markerCooldown;
     private float markerTimer = 0;
+    private List<PathMarker> markerList = new List<PathMarker>();
+    public List<PathMarker> MarkerList => markerList;
 
     private PersonStatus status = PersonStatus.WALKING; // TODO: start in idle
 
@@ -198,16 +205,21 @@ public class Person : MonoBehaviour
         if (markerTimer <= 0f)
         {
             PathMarker tempMarker = Instantiate<PathMarker>(marker, startingPoint, Quaternion.identity);
+            tempMarker.GetComponent<SpriteRenderer>().color = line.startColor;
             tempMarker.Owner = this;
+            markerList.Add(tempMarker);
             markerTimer += markerCooldown;
         }
         markerTimer -= Time.deltaTime;
 
         // order sprites correctly in layer
         int order = (int)(transform.position.y * -1000f);
-        hair.sortingOrder = order + 2;
-        skin.sortingOrder = order;
-        clothes.sortingOrder = order + 1;
+        hair.sortingOrder = order + 5;
+        head.sortingOrder = order + 4;
+        body.sortingOrder = order;
+        shirt.sortingOrder = order + 3;
+        pants.sortingOrder = order + 1;
+        shoes.sortingOrder = order + 2;
     }
 
     public void AcknowledgePathChange()
@@ -231,8 +243,36 @@ public class Person : MonoBehaviour
                     comp.AddListener(this);
                 }
                 path = new List<PathComponent>(previewPath);
-                previewPath.Clear();
-                blockedEdges.Clear();
+                for (int i = 0; i < requiredNodes.Count; ++i)
+                {
+                    if (altNodeMap.ContainsKey(requiredNodes[i]))
+                    {
+                        requiredNodes[i] = altNodeMap[requiredNodes[i]];
+                        --i;
+                    }
+                }
+                ClearPreview();
+                break;
+
+            case Obstruction.SHUTDOWN:
+                foreach (PathComponent comp in path)
+                {
+                    comp.RemoveListener(this);
+                }
+                foreach (PathComponent comp in previewPath)
+                {
+                    comp.AddListener(this);
+                }
+                path = new List<PathComponent>(previewPath);
+                for (int i = 0; i < requiredNodes.Count; ++i)
+                {
+                    if (altNodeMap.ContainsKey(requiredNodes[i]))
+                    {
+                        requiredNodes[i] = altNodeMap[requiredNodes[i]];
+                        --i;
+                    }
+                }
+                ClearPreview();
                 break;
 
             default:
@@ -273,11 +313,153 @@ public class Person : MonoBehaviour
                 previewPath.Clear();
                 for (int i = 1; i < requiredPreviewNodes.Count; ++i)
                 {
-                    // TODO: check if a path cost is >= MAX_DISTANCE and attempt to go to another building, or prevent user from placing obstruction
-                    previewPath.AddRange(Map.instance.CalculateShortestPaths(requiredPreviewNodes[i - 1], seed, blockedEdges)[requiredPreviewNodes[i]]);
+                    // check if a path cost is >= MAX_DISTANCE and attempt to go to another building, or prevent user from placing obstruction
+                    Dictionary<Node, List<PathComponent>> pathMap = Map.instance.CalculateShortestPaths(requiredPreviewNodes[i - 1], seed, blockedEdges);
+                    List<PathComponent> pathChunk = pathMap[requiredPreviewNodes[i]];
+                    long pathCost = pathChunk.Aggregate(0, (current, next) =>
+                    {
+                        if (next is Edge)
+                        {
+                            Edge nextEdge = next as Edge;
+                            return current + (blockedEdges.Contains(nextEdge) ? Distance.MAX_DISTANCE : nextEdge.value);
+                        }
+                        return current;
+                    });
+                    if (pathCost >= Distance.MAX_DISTANCE)
+                    {
+                        List<Node> possibleAlts = Map.instance.graph.Where((PathComponent comp) =>
+                        {
+                            if (comp is Node)
+                            {
+                                Node compNode = comp as Node;
+                                return compNode.nodeType == requiredPreviewNodes[i].nodeType && compNode != requiredPreviewNodes[i] && compNode.IsOpen;
+                            }
+                            return false;
+                        }).Select((comp) => comp as Node).ToList();
+
+                        Rng rng = new Rng(seed);
+                        while (possibleAlts.Any())
+                        {
+                            Node possibleAlt = possibleAlts[rng.GetNumber() % possibleAlts.Count];
+                            List<PathComponent> altChunk = pathMap[possibleAlt];
+                            long altCost = altChunk.Aggregate(0, (current, next) =>
+                            {
+                                if (next is Edge)
+                                {
+                                    Edge nextEdge = next as Edge;
+                                    return current + (blockedEdges.Contains(nextEdge) ? Distance.MAX_DISTANCE : nextEdge.value);
+                                }
+                                return current;
+                            });
+                            if (altCost < Distance.MAX_DISTANCE)
+                            {
+                                pathChunk = altChunk;
+                                altNodeMap[requiredPreviewNodes[i]] = possibleAlt;
+                                requiredPreviewNodes[i] = possibleAlt;
+                                break;
+                            }
+                            possibleAlts.Remove(possibleAlt);
+                        }
+                    }
+
+                    previewPath.AddRange(pathChunk);
                 }
 
                 previewPath.InsertRange(0, path.GetRange(0, pathBlockedEdgeIndex));
+                ClearMarkers();
+                break;
+
+            case Obstruction.SHUTDOWN:
+                // figure out when the person is supposed to idle at this location
+                List<Node> requiredPreviewNodes2 = new List<Node>(requiredNodes);
+                int shutdownNodeIndex = -1;
+                for (int i = 0; i < path.Count; ++i)
+                {
+                    if (path[i] is Node)
+                    {
+                        Node pathNode = path[i] as Node;
+                        if(requiredPreviewNodes2[0] == pathNode)
+                        {
+                            if (comps.Contains(pathNode))
+                            {
+                                shutdownNodeIndex = i;
+                                List<Node> possibleAlts = Map.instance.graph.Where((PathComponent comp) =>
+                                {
+                                    if (comp is Node)
+                                    {
+                                        Node compNode = comp as Node;
+                                        return compNode.nodeType == requiredPreviewNodes2[0].nodeType && compNode != requiredPreviewNodes2[0] && compNode.IsOpen;
+                                    }
+                                    return false;
+                                }).Select((comp) => comp as Node).ToList();
+                                requiredPreviewNodes2.Insert(1, possibleAlts[new Rng(seed).GetNumber() % possibleAlts.Count]);
+                                altNodeMap[requiredPreviewNodes2[0]] = requiredPreviewNodes2[1];
+                                break;
+                            }
+                            else
+                            {
+                                requiredPreviewNodes2.Remove(pathNode);
+                            }
+                        }
+                    }
+                }
+                // calculate preview path
+                previewPath.Clear();
+                for (int i = 1; i < requiredPreviewNodes2.Count; ++i)
+                {
+                    // check if a path cost is >= MAX_DISTANCE and attempt to go to another building, or prevent user from placing obstruction
+                    Dictionary<Node, List<PathComponent>> pathMap = Map.instance.CalculateShortestPaths(requiredPreviewNodes2[i - 1], seed, blockedEdges);
+                    List<PathComponent> pathChunk = pathMap[requiredPreviewNodes2[i]];
+                    long pathCost = pathChunk.Aggregate(0, (current, next) =>
+                    {
+                        if (next is Edge)
+                        {
+                            Edge nextEdge = next as Edge;
+                            return current + (blockedEdges.Contains(nextEdge) ? Distance.MAX_DISTANCE : nextEdge.value);
+                        }
+                        return current;
+                    });
+                    if (pathCost >= Distance.MAX_DISTANCE)
+                    {
+                        List<Node> possibleAlts = Map.instance.graph.Where((PathComponent comp) =>
+                        {
+                            if (comp is Node)
+                            {
+                                Node compNode = comp as Node;
+                                return compNode.nodeType == requiredPreviewNodes2[i].nodeType && compNode != requiredPreviewNodes2[i] && compNode.IsOpen;
+                            }
+                            return false;
+                        }).Select((comp) => comp as Node).ToList();
+
+                        Rng rng = new Rng(seed);
+                        while (possibleAlts.Any())
+                        {
+                            Node possibleAlt = possibleAlts[rng.GetNumber() % possibleAlts.Count];
+                            List<PathComponent> altChunk = pathMap[possibleAlt];
+                            long altCost = altChunk.Aggregate(0, (current, next) =>
+                            {
+                                if (next is Edge)
+                                {
+                                    Edge nextEdge = next as Edge;
+                                    return current + (blockedEdges.Contains(nextEdge) ? Distance.MAX_DISTANCE : nextEdge.value);
+                                }
+                                return current;
+                            });
+                            if (altCost < Distance.MAX_DISTANCE)
+                            {
+                                pathChunk = altChunk;
+                                altNodeMap[requiredPreviewNodes2[i]] = possibleAlt;
+                                requiredPreviewNodes2[i] = possibleAlt;
+                                break;
+                            }
+                            possibleAlts.Remove(possibleAlt);
+                        }
+                    }
+                    previewPath.AddRange(pathChunk);
+                }
+
+                previewPath.InsertRange(0, path.GetRange(0, shutdownNodeIndex + 1));
+                ClearMarkers();
                 break;
 
             case Obstruction.RUSH_HOUR:
@@ -303,13 +485,16 @@ public class Person : MonoBehaviour
     {
         previewPath.Clear();
         blockedEdges.Clear();
+        altNodeMap.Clear();
         blockedNode = null;
+        ClearMarkers();
     }
 
     public void PairUp()
     {
         status = PersonStatus.PAIRED;
         line.positionCount = 0;
+        ClearMarkers();
     }
 
     private void OnTriggerEnter2D(Collider2D collision)
@@ -331,8 +516,11 @@ public class Person : MonoBehaviour
     private void EnableSprites(bool enable)
     {
         hair.enabled = enable;
-        skin.enabled = enable;
-        clothes.enabled = enable;
+        head.enabled = enable;
+        body.enabled = enable;
+        shirt.enabled = enable;
+        pants.enabled = enable;
+        shoes.enabled = enable;
     }
 
     private void RemovePathNode(Node node)
@@ -378,6 +566,15 @@ public class Person : MonoBehaviour
             {
                 ClearPreview();
             }
+        }
+    }
+
+    private void ClearMarkers()
+    {
+        List<PathMarker> tempList = new List<PathMarker>(markerList);
+        foreach (PathMarker tempMarker in tempList)
+        {
+            Destroy(tempMarker);
         }
     }
 }

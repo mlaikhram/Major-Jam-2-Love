@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class Distance
 {
-    public static readonly int MAX_DISTANCE = 1000;
+    public static readonly int MAX_DISTANCE = 1000000;
 }
 
 public class Delay
@@ -42,4 +42,12 @@ public enum PersonStatus
     WALKING,
     IDLE,
     PAIRED
+}
+
+public class Colors
+{
+    public Color[] SKIN = { 
+        new Color(0.5377358f, 0.3810211f, 0.04312033f, 1f),
+        new Color(0.8584906f, 0.6720858f, 0.2713154f, 1f)
+    };
 }
