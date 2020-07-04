@@ -6,6 +6,7 @@ public class Node : PathComponent
 {
     public List<Edge> edges;
     public NodeType nodeType;
+    public Color buildingColor;
     public float idleTime;
     public bool hideIdle;
     public Vector3 idlePosition;

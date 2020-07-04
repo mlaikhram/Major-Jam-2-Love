@@ -9,6 +9,7 @@ using UnityEngine;
 
 public class Person : MonoBehaviour
 {
+    public Timeline timeline;
     public SpriteRenderer hair;
     public SpriteRenderer head;
     public SpriteRenderer body;
@@ -17,6 +18,7 @@ public class Person : MonoBehaviour
     public SpriteRenderer shoes;
     public int seed; // could possibly add "salt" that changes after every committed obstruction (only obstructions that affect me); salt determines an initial amount of times to cycle the seed
     public float walkSpeed;
+    public bool showPath;
     public List<Node> requiredNodes;
 
     [Serializable]
@@ -88,6 +90,11 @@ public class Person : MonoBehaviour
         requiredNodes.RemoveAt(0);
         // remove first edge
         path.RemoveAt(0);
+
+        // initialize line and timeline
+        line.startColor = new Color(shirt.color.r, shirt.color.g, shirt.color.b, 0.8f);
+        line.endColor = new Color(shirt.color.r, shirt.color.g, shirt.color.b, 0.8f);
+        timeline.InitTimeline(this);
     }
 
     void Update()
@@ -184,33 +191,52 @@ public class Person : MonoBehaviour
 
         // update timeline
         //      include check for blockedNode when paired with MouseState for delays
-
-        // update line render
         Vector3 startingPoint = idleNode == null ? transform.position : idleNode.transform.position;
-
-        line.positionCount = 1;
-        line.SetPosition(0, startingPoint);
-        int i = 1;
         List<PathComponent> pathToDraw = previewPath.Any() ? previewPath : path;
-        foreach (PathComponent comp in pathToDraw)
-        {
-            if (comp is Node)
-            {
-                ++line.positionCount;
-                line.SetPosition(i++, comp.transform.position);
-            }
-        }
+        timeline.UpdateTimeline(
+            startingPoint,
+            pathToDraw,
+            requiredNodes,
+            walkSpeed,
+            altNodeMap,
+            idleNode,
+            idleTimer,
+            idleMap,
+            blockedNode
+            );
 
-        // spawn marker if necessary
-        if (markerTimer <= 0f)
+        line.positionCount = 0;
+
+        // update line render if timeline eye is open
+        if (timeline != null && timeline.eye.color.r > 0.5f)
         {
-            PathMarker tempMarker = Instantiate<PathMarker>(marker, startingPoint, Quaternion.identity);
-            tempMarker.GetComponent<SpriteRenderer>().color = line.startColor;
-            tempMarker.Owner = this;
-            markerList.Add(tempMarker);
-            markerTimer += markerCooldown;
+            line.positionCount = 1;
+            line.SetPosition(0, startingPoint);
+            int i = 1;
+            foreach (PathComponent comp in pathToDraw)
+            {
+                if (comp is Node)
+                {
+                    ++line.positionCount;
+                    line.SetPosition(i++, comp.transform.position);
+                }
+            }
+
+            // spawn marker if necessary
+            if (markerTimer <= 0f)
+            {
+                PathMarker tempMarker = Instantiate<PathMarker>(marker, startingPoint, Quaternion.identity);
+                tempMarker.GetComponent<SpriteRenderer>().color = line.startColor;
+                tempMarker.Owner = this;
+                markerList.Add(tempMarker);
+                markerTimer += markerCooldown;
+            }
+            markerTimer -= Time.deltaTime;
         }
-        markerTimer -= Time.deltaTime;
+        else
+        {
+            ClearMarkers();
+        }
 
         // order sprites correctly in layer
         int order = (int)(transform.position.y * -1000f);
@@ -255,24 +281,27 @@ public class Person : MonoBehaviour
                 break;
 
             case Obstruction.SHUTDOWN:
-                foreach (PathComponent comp in path)
+                if (previewPath.Any())
                 {
-                    comp.RemoveListener(this);
-                }
-                foreach (PathComponent comp in previewPath)
-                {
-                    comp.AddListener(this);
-                }
-                path = new List<PathComponent>(previewPath);
-                for (int i = 0; i < requiredNodes.Count; ++i)
-                {
-                    if (altNodeMap.ContainsKey(requiredNodes[i]))
+                    foreach (PathComponent comp in path)
                     {
-                        requiredNodes[i] = altNodeMap[requiredNodes[i]];
-                        //--i;
+                        comp.RemoveListener(this);
                     }
+                    foreach (PathComponent comp in previewPath)
+                    {
+                        comp.AddListener(this);
+                    }
+                    path = new List<PathComponent>(previewPath);
+                    for (int i = 0; i < requiredNodes.Count; ++i)
+                    {
+                        if (altNodeMap.ContainsKey(requiredNodes[i]))
+                        {
+                            requiredNodes[i] = altNodeMap[requiredNodes[i]];
+                            //--i;
+                        }
+                    }
+                    ClearPreview();
                 }
-                ClearPreview();
                 break;
 
             default:
@@ -371,95 +400,99 @@ public class Person : MonoBehaviour
 
             case Obstruction.SHUTDOWN:
                 // figure out when the person is supposed to idle at this location
-                List<Node> requiredPreviewNodes2 = new List<Node>(requiredNodes);
-                int shutdownNodeIndex = -1;
-                for (int i = 0; i < path.Count; ++i)
+                List<Node> compNodes = comps.Select((PathComponent comp) => comp as Node).ToList();
+                if (requiredNodes.Intersect(compNodes).Count() > 0 && !compNodes.Contains(idleNode))
                 {
-                    if (path[i] is Node)
+                    List<Node> requiredPreviewNodes2 = new List<Node>(requiredNodes);
+                    int shutdownNodeIndex = -1;
+                    for (int i = 0; i < path.Count; ++i)
                     {
-                        Node pathNode = path[i] as Node;
-                        if(requiredPreviewNodes2[0] == pathNode)
+                        if (path[i] is Node)
                         {
-                            if (comps.Contains(pathNode))
+                            Node pathNode = path[i] as Node;
+                            if (requiredPreviewNodes2[0] == pathNode)
                             {
-                                shutdownNodeIndex = i;
-                                List<Node> possibleAlts = Map.instance.graph.Where((PathComponent comp) =>
+                                if (comps.Contains(pathNode))
                                 {
-                                    if (comp is Node)
+                                    shutdownNodeIndex = i;
+                                    List<Node> possibleAlts = Map.instance.graph.Where((PathComponent comp) =>
                                     {
-                                        Node compNode = comp as Node;
-                                        return compNode.nodeType == requiredPreviewNodes2[0].nodeType && compNode != requiredPreviewNodes2[0] && compNode.IsOpen;
-                                    }
-                                    return false;
-                                }).Select((comp) => comp as Node).ToList();
-                                requiredPreviewNodes2.Insert(1, possibleAlts[new Rng(seed).GetNumber() % possibleAlts.Count]);
-                                altNodeMap[requiredPreviewNodes2[0]] = requiredPreviewNodes2[1];
-                                break;
-                            }
-                            else
-                            {
-                                requiredPreviewNodes2.Remove(pathNode);
-                            }
-                        }
-                    }
-                }
-                // calculate preview path
-                previewPath.Clear();
-                for (int i = 1; i < requiredPreviewNodes2.Count; ++i)
-                {
-                    // check if a path cost is >= MAX_DISTANCE and attempt to go to another building, or prevent user from placing obstruction
-                    Dictionary<Node, List<PathComponent>> pathMap = Map.instance.CalculateShortestPaths(requiredPreviewNodes2[i - 1], seed, blockedEdges);
-                    List<PathComponent> pathChunk = pathMap[requiredPreviewNodes2[i]];
-                    long pathCost = pathChunk.Aggregate(0, (current, next) =>
-                    {
-                        if (next is Edge)
-                        {
-                            Edge nextEdge = next as Edge;
-                            return current + (blockedEdges.Contains(nextEdge) ? Distance.MAX_DISTANCE : nextEdge.value);
-                        }
-                        return current;
-                    });
-                    if (pathCost >= Distance.MAX_DISTANCE)
-                    {
-                        List<Node> possibleAlts = Map.instance.graph.Where((PathComponent comp) =>
-                        {
-                            if (comp is Node)
-                            {
-                                Node compNode = comp as Node;
-                                return compNode.nodeType == requiredPreviewNodes2[i].nodeType && compNode != requiredPreviewNodes2[i] && compNode.IsOpen;
-                            }
-                            return false;
-                        }).Select((comp) => comp as Node).ToList();
-
-                        Rng rng = new Rng(seed);
-                        while (possibleAlts.Any())
-                        {
-                            Node possibleAlt = possibleAlts[rng.GetNumber() % possibleAlts.Count];
-                            List<PathComponent> altChunk = pathMap[possibleAlt];
-                            long altCost = altChunk.Aggregate(0, (current, next) =>
-                            {
-                                if (next is Edge)
-                                {
-                                    Edge nextEdge = next as Edge;
-                                    return current + (blockedEdges.Contains(nextEdge) ? Distance.MAX_DISTANCE : nextEdge.value);
+                                        if (comp is Node)
+                                        {
+                                            Node compNode = comp as Node;
+                                            return compNode.nodeType == requiredPreviewNodes2[0].nodeType && compNode != requiredPreviewNodes2[0] && compNode.IsOpen;
+                                        }
+                                        return false;
+                                    }).Select((comp) => comp as Node).ToList();
+                                    requiredPreviewNodes2.Insert(1, possibleAlts[new Rng(seed).GetNumber() % possibleAlts.Count]);
+                                    altNodeMap[requiredPreviewNodes2[0]] = requiredPreviewNodes2[1];
+                                    break;
                                 }
-                                return current;
-                            });
-                            if (altCost < Distance.MAX_DISTANCE)
-                            {
-                                pathChunk = altChunk;
-                                altNodeMap[requiredPreviewNodes2[i]] = possibleAlt;
-                                requiredPreviewNodes2[i] = possibleAlt;
-                                break;
+                                else
+                                {
+                                    requiredPreviewNodes2.Remove(pathNode);
+                                }
                             }
-                            possibleAlts.Remove(possibleAlt);
                         }
                     }
-                    previewPath.AddRange(pathChunk);
-                }
+                    // calculate preview path
+                    previewPath.Clear();
+                    for (int i = 1; i < requiredPreviewNodes2.Count; ++i)
+                    {
+                        // check if a path cost is >= MAX_DISTANCE and attempt to go to another building, or prevent user from placing obstruction
+                        Dictionary<Node, List<PathComponent>> pathMap = Map.instance.CalculateShortestPaths(requiredPreviewNodes2[i - 1], seed, blockedEdges);
+                        List<PathComponent> pathChunk = pathMap[requiredPreviewNodes2[i]];
+                        long pathCost = pathChunk.Aggregate(0, (current, next) =>
+                        {
+                            if (next is Edge)
+                            {
+                                Edge nextEdge = next as Edge;
+                                return current + (blockedEdges.Contains(nextEdge) ? Distance.MAX_DISTANCE : nextEdge.value);
+                            }
+                            return current;
+                        });
+                        if (pathCost >= Distance.MAX_DISTANCE)
+                        {
+                            List<Node> possibleAlts = Map.instance.graph.Where((PathComponent comp) =>
+                            {
+                                if (comp is Node)
+                                {
+                                    Node compNode = comp as Node;
+                                    return compNode.nodeType == requiredPreviewNodes2[i].nodeType && compNode != requiredPreviewNodes2[i] && compNode.IsOpen;
+                                }
+                                return false;
+                            }).Select((comp) => comp as Node).ToList();
 
-                previewPath.InsertRange(0, path.GetRange(0, shutdownNodeIndex + 1));
-                ClearMarkers();
+                            Rng rng = new Rng(seed);
+                            while (possibleAlts.Any())
+                            {
+                                Node possibleAlt = possibleAlts[rng.GetNumber() % possibleAlts.Count];
+                                List<PathComponent> altChunk = pathMap[possibleAlt];
+                                long altCost = altChunk.Aggregate(0, (current, next) =>
+                                {
+                                    if (next is Edge)
+                                    {
+                                        Edge nextEdge = next as Edge;
+                                        return current + (blockedEdges.Contains(nextEdge) ? Distance.MAX_DISTANCE : nextEdge.value);
+                                    }
+                                    return current;
+                                });
+                                if (altCost < Distance.MAX_DISTANCE)
+                                {
+                                    pathChunk = altChunk;
+                                    altNodeMap[requiredPreviewNodes2[i]] = possibleAlt;
+                                    requiredPreviewNodes2[i] = possibleAlt;
+                                    break;
+                                }
+                                possibleAlts.Remove(possibleAlt);
+                            }
+                        }
+                        previewPath.AddRange(pathChunk);
+                    }
+
+                    previewPath.InsertRange(0, path.GetRange(0, shutdownNodeIndex + 1));
+                    ClearMarkers();
+                }
                 break;
 
             case Obstruction.RUSH_HOUR:
